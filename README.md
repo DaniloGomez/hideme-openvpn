@@ -1,18 +1,12 @@
 # hideme-openvpn
 
-Connect to vpnbook using openvpn, Only tested on Ubuntu and Kali. 
+Connect to vpnbook using openvpn, Only tested on Ubuntu and Kali.
 
 ## Usage
 
-`sudo ./hideme.py us`
+`sudo ./hideme.py`
 
 killing openvpn
 
 `sudo killall openvpn`
-
-### Params
-
-* us
-* ca
-* euro
 
