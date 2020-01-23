@@ -1,70 +1,75 @@
 #!/usr/bin/env python
 
-import requests, os, sys, zipfile, StringIO, subprocess, time
-from subprocess import Popen, PIPE, STDOUT
-from BeautifulSoup import BeautifulSoup as Soup
+import requests, io, subprocess, time, zipfile
+from bs4 import BeautifulSoup as Soup
 
-if len(sys.argv) < 2:
-    print 'usage: '+sys.argv[0]+' [servers(lowercase) - us / ca / euro]'
-    sys.exit()
+password_path = '/etc/openvpn/password.txt'
+config_path = '/etc/openvpn/hideme.conf'
 
-server = sys.argv[1]
+ocr_uri = 'https://api.ocr.space/parse/image'
+api_key = '5a64d478-9c89-43d8-88e3-c65de9999580'
+
+base = 'https://www.vpnbook.com'
 username = 'vpnbook'
 
-if (server == 'us'):
-    url = 'http://www.vpnbook.com/free-openvpn-account/VPNBook.com-OpenVPN-US1.zip'
-elif(server == 'ca'):
-    url = 'http://www.vpnbook.com/free-openvpn-account/VPNBook.com-OpenVPN-CA1.zip'
-elif(server == 'euro'):
-    url = 'http://www.vpnbook.com/free-openvpn-account/VPNBook.com-OpenVPN-Euro1.zip'
-else:
-    url = 'http://www.vpnbook.com/free-openvpn-account/VPNBook.com-OpenVPN-US1.zip'
+def select_entry(entry_type, entries, labels):
+    print('Select', entry_type, 'from below [0]')
+    for i, label in enumerate(labels):
+        print(f'[{i}] {label}')
+    try:
+        i = input() or 0
+        return entries[int(i)]
+    except:
+        print(f'Invalid option ({i})')
+        exit()
 
-print "\nGetting VPN password..."
 
+print('Getting VPN password...')
 try:
     s = requests.Session()
-    r = s.get("http://www.vpnbook.com")
-    soup = Soup(r.text)
+    r = s.get(base)
+    soup = Soup(r.text, 'html.parser')
 
-    for strong_tag in soup.findAll('strong'):
-        if (strong_tag.text.find('Password') == 0):
-            password = strong_tag.text.replace('Password: ', '').strip()
+    img_src = next(filter(lambda img: img['src'].startswith('password'), soup.findAll('img')))['src']
+    params = {'url': f'{base}/{img_src}'}
+    headers = {'apikey': api_key}
+    response = requests.post(ocr_uri, params, headers=headers)
+    password = response.json()['ParsedResults'][0]['ParsedText'].strip()
+
+    with open(password_path, 'w') as file:
+        file.write('\n'.join((username, password)))
 except:
-    print 'Cannot find password'
-
-print "\nGetting ovpn files..."
+    print(f'Cannot find password, write it yourself in `{password_path}`')
+print()
 
 try:
-    r = requests.get(url, stream=True) 
+    links = list(filter(lambda a: a['href'].endswith('.zip'), soup.findAll('a')))
+    labels = map(lambda a: a.text, links)
+    ref = select_entry('a VPN server', links, labels)['href']
+    profile_url = base + ref
 except:
-    print 'Cannot get VPN servers data'
-    sys.exit()
-
-print "\nExtracting ovpn files..."
+    print('Cannot get VPN server list')
+    exit()
+print()
 
 try:
-    z = zipfile.ZipFile(StringIO.StringIO(r.content))
-    z.extractall()
+    req = requests.get(profile_url, stream=True)
+    zf = zipfile.ZipFile(io.BytesIO(req.content))
+    entry = select_entry('a profile', zf.filelist, zf.namelist())
+    with open(config_path, 'wb') as file:
+        file.write(zf.read(entry))
 except:
-    print 'Cannot extract data'
-    sys.exit()
+    print('Cannot get ovpn profile')
+    raise
+    exit()
+print()
 
-print "\nLaunching VPN..."
-
-cwd = os.getcwd()
-path = cwd+'/vpnbook-'+server+'1-tcp443.ovpn'
-
-file = open('/etc/openvpn/password.txt','w')
-file.write(username+'\n')
-file.write(password+'\n')
-file.close()
-
-p = subprocess.Popen(['sudo', 'openvpn', '--config', path, '--auth-user-pass', '/etc/openvpn/password.txt'],  stdout=PIPE, stderr=PIPE)
+print('Launching VPN...')
+p = subprocess.Popen(['sudo', 'openvpn', '--config', config_path, '--auth-user-pass', password_path])
 
 #http://askubuntu.com/questions/298419/how-to-disconnect-from-openvpn
-print '\nVPN Started - To kill openvpn run "sudo killall openvpn"\n'
-print 'Termination with Ctrl+C\n'
+print('\nVPN Started - To kill openvpn run "sudo killall openvpn"\n')
+print('Termination with Ctrl+C\n')
 
 try:
     while True:
@@ -77,7 +82,6 @@ except:
         pass
     while p.poll() != 0:
         time.sleep(1)
-    print '\nVPN terminated'
+    print('\nVPN terminated')
 
-sys.exit()
-
+exit()
