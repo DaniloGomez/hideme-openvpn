@@ -1,6 +1,7 @@
 # hideme-openvpn
 
-Connect to vpnbook using openvpn, Only tested on Ubuntu and Kali.
+`hideme-openvpn` connects to VPNBook using OpenVPN, and interactively select the desired ovpn profile.
+This piece of software was tested on Ubuntu, Kali, and Arch.
 
 ## Usage
 
@@ -9,4 +10,3 @@ Connect to vpnbook using openvpn, Only tested on Ubuntu and Kali.
 killing openvpn
 
 `sudo killall openvpn`
-
